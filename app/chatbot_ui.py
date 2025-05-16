@@ -1,15 +1,9 @@
 from llama_stack_client import LlamaStackClient
 from llama_stack_client.types import UserMessage
 
-#from langchain_openai import ChatOpenAI
-#from langchain.chains import LLMChain
-#from langchain_community.callbacks import StreamlitCallbackHandler
-#from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-#from langchain.memory import ConversationBufferWindowMemory
 import streamlit as st
 import requests
 import time
-import json
 import os 
 
 model_service_base = os.getenv("MODEL_ENDPOINT",
@@ -59,6 +53,9 @@ for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
 if prompt := st.chat_input(disabled=st.session_state["input_disabled"],on_submit=disableInput):
+    message_placeholder = st.empty()
+    full_response = ""
+
     st.session_state.messages.append({"role": "user", "content": prompt})
     client = LlamaStackClient(
         base_url=model_service_base,
@@ -72,9 +69,15 @@ if prompt := st.chat_input(disabled=st.session_state["input_disabled"],on_submit
             ),
         ],
         model_id=modelId,
-        stream=False
+        stream=True
     )
-    print(response)
-    st.session_state.messages.append({"role": "assistant", "content": response.completion_message.content})
+    for chunk in response:
+        if chunk.event is not None and chunk.event.event_type == "progress":
+            full_response += chunk.event.delta.text
+        message_placeholder.markdown(full_response + "▌")
+    message_placeholder.markdown(full_response)
+
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
     enableInput()
     st.rerun()
+    
